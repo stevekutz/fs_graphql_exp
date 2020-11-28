@@ -19,8 +19,19 @@ Other configuration details:
 ##### The server is set up using Express and middleware
 
 - note that helmet is initialized first the router config
+- The following are run to set up express and middleware
+- Once complete, the server is launched  using `npm run server`
+- Create `src/server/index.js for the express server`
+
+    ~~~ bash
+    npm install --save express
+    npm install --save nodemon   
+    npm install --save -dev @babel/node
+    npm install --save compression cors helmet
+    ~~~
 
     ~~~ js
+    // index.js
     import helmet from 'helmet'; // secures HTTP headers
     import express from 'express';
     import path from 'path';
@@ -52,3 +63,124 @@ Other configuration details:
     });
     ~~~
 
+##### GraphQL is set up with Apollo server
+
+Apollo server integrates well with Express middleware
+
+- install dependencies
+
+    ~~~ bash 
+    npm install --save apollo-server-express graphql graphql-tools
+    ~~~
+
+
+- Set up a `services` and `services/graphql` folder
+
+
+
+###### services/graphql/index.js
+- `makeExecutableSchema` merges resolver functions and schema from GraphQL
+- `context` includes Express request obj
+
+    ~~~ js
+    import {ApolloServer, SchemaDirectiveVisitor} from 'apollo-server-express';
+    import {makeExecutableSchema} from 'graphql-tools';
+    import Resolvers from './resolvers';
+    import Schema from './schema';
+
+    // makeExecutableSchema` merges resolver functions and schema from GraphQL
+    const executableSchema = makeExecutableSchema({
+        typeDefs: Schema,
+        resolvers: Resolvers,
+    });
+
+
+    // context includes Express request obj
+    const server = new ApolloServer({
+        schema: executableSchema,
+        context: ({request}) => request
+    })
+
+    export default server;
+    ~~~
+
+###### services/index.js
+
+- takes all resources from graphql folder and merges them into a single 
+
+    ~~~ js
+    import graphql from './graphql';
+
+    // takes all resources from graphql folder and merges them into a single obj
+    export default {graphql};
+    ~~~
+
+###### server/index.js
+
+- add the following:
+- `applyMiddleWare` lets Apollo Server bind to Express server without interference from the `use function from Express`
+
+    ~~~ js
+    import services from './services'; // holds the graphql index
+
+    ...
+
+
+    // binds GraphQL server to Express server
+    const serviceNames = Object.keys(services);
+
+    for(let i = 0; i < serviceNames.length; i ++) {
+        const name = serviceNames[i];
+
+        if (name === 'graphql') {
+            services[name].applyMiddleware({app});
+        }
+        else {
+            app.use(`/${name}`, services[name]);
+        }
+    }
+
+    ~~~
+
+###### services/graphql/schema.js
+
+- the `Post` query simply defines Post fields
+- the  `RootQuery` returns all available posts
+- the schema is exported as an array
+
+    ~~~ js
+    const typeDefinitions = `
+        type Post {
+            id: Int
+            text: String
+        }
+        
+        type RootQuery {
+            posts: [Post]
+        }
+
+        schema {
+            query: RootQuery
+        }
+
+    `;
+
+    export default [typeDefinitions];
+    ~~~
+
+###### services/graphql/resolvers.js 
+
+- A resolver can optionally accept four positional arguments: (parent, args, context, info)
+- A resolver is a function that is responsible for providing data for a single field from the schema
+
+    ~~~ js
+    const resolvers = {
+        RootQuery: {
+            posts(root, args, context) {
+                return []
+            },    
+        },
+    };
+
+    export default resolvers;
+    ~~~
